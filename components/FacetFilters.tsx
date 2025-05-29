@@ -1,52 +1,86 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-interface FacetFiltersProps {
-  facets: any;
-  onFilterChange: (filters: any) => void;
+interface Facets {
+  priceRange: { min: number; max: number };
+  [key: string]: any;
 }
 
-export default function FacetFilters({ facets, onFilterChange }: FacetFiltersProps) {
-  const [selectedFilters, setSelectedFilters] = useState<Record<string, any[]>>({});
+interface FacetFiltersProps {
+  facets: any;
+  selectedFilters: Record<string, any[]>;
+  setSelectedFilters: (filters: Record<string, any[]>) => void;
+  onFilterChange: (filters: any) => void;
+  onSearch: () => void;
+  isLoading: boolean;
+}
+
+export default function FacetFilters({
+  facets,
+  selectedFilters,
+  setSelectedFilters,
+  onFilterChange,
+  onSearch,
+  isLoading,
+}: FacetFiltersProps) {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const handleFilterChange = (facetKey: string, value: any) => {
+  console.log('facetKey: selectedFilters: ', selectedFilters);
+  const handleFilterChange = async (facetKey: string, value: any) => {
+    console.log('facetKey: ', facetKey);
+    console.log('value: ', value);
+
     setSelectedFilters((prev) => {
       const newFilters = { ...prev };
       if (!newFilters[facetKey]) {
         newFilters[facetKey] = [];
       }
 
-      const index = newFilters[facetKey].indexOf(value);
-      if (index === -1) {
-        newFilters[facetKey].push(value);
+      // Check if the value already exists in the array
+      const valueExists = newFilters[facetKey].some((item) => item.value === value.value);
+
+      if (!valueExists) {
+        // Add the value if it doesn't exist
+        newFilters[facetKey] = [...newFilters[facetKey], value];
       } else {
-        newFilters[facetKey].splice(index, 1);
+        // Remove the value if it exists
+        newFilters[facetKey] = newFilters[facetKey].filter((item) => item.value !== value.value);
       }
 
+      // Clean up empty arrays
       if (newFilters[facetKey].length === 0) {
         delete newFilters[facetKey];
       }
 
+      console.log('Updated filters:', newFilters);
       onFilterChange(newFilters);
       return newFilters;
     });
   };
 
-  if (!isMounted || !facets) return null;
+  if (isLoading) {
+    return <div className="border p-4 rounded shadow">Loading facets...</div>;
+  }
+
+  if (!facets) {
+    return null;
+  }
 
   return (
     <div className="border p-4 rounded shadow">
-      <h3 className="text-lg font-bold mb-4">Filters</h3>
+      <h3 className="text-lg font-bold mb-4">
+        Filters {isLoading && <span className="text-sm text-gray-500">(Loading...)</span>}
+      </h3>
 
       {Object.entries(facets).map(([key, values]) => {
         if (!Array.isArray(values) || values.length === 0) return null;
         if (key === 'priceRange') {
-          const { min, max } = values as { min: number; max: number };
+          const priceRange = values as unknown as { min: number; max: number };
+          const { min, max } = priceRange;
           return (
             <div key={key} className="mb-4">
               <h4 className="font-semibold mb-2">Price Range</h4>
@@ -69,11 +103,13 @@ export default function FacetFilters({ facets, onFilterChange }: FacetFiltersPro
             <h4 className="font-semibold mb-2">{key.charAt(0).toUpperCase() + key.slice(1)}</h4>
             <div className="space-y-2">
               {values.map((value: any, index: number) => {
+                const isChecked =
+                  selectedFilters[key]?.some((v) => v.value === value.value) || false;
                 return (
-                  <label key={`${key}-${value}-${index}`} className="flex items-center gap-2">
+                  <label key={`${key}-${value.value}-${index}`} className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={selectedFilters[key]?.includes(value) || false}
+                      checked={isChecked}
                       onChange={() => handleFilterChange(key, value)}
                       className="rounded"
                     />

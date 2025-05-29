@@ -1,15 +1,42 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import SearchBar from '../components/SearchBar';
 import FacetFilters from '../components/FacetFilters';
+import { performSearch, setFilters, setQuery, fetchFacets } from '@/store/searchSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '@/store';
 
 export default function Home() {
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [facets, setFacets] = useState<any>(null);
+  const dispatch = useDispatch<AppDispatch>();
+  const { products, facets, isLoading } = useSelector((state: RootState) => state.search);
+  const [queryString, setQueryString] = useState<string>('');
+  const [selectedFilters, setSelectedFilters] = useState<Record<string, any[]>>({});
 
-  const handleSearch = (results: any[], newFacets: any) => {
-    setSearchResults(results);
-    setFacets(newFacets);
+  // Fetch facets on component mount
+  useEffect(() => {
+    dispatch(fetchFacets());
+  }, [dispatch]);
+
+  const handleSearch = (data = { query: queryString, filters: selectedFilters }) => {
+    console.log('queryString: ', queryString);
+    dispatch(setQuery(queryString));
+    dispatch(performSearch(data));
+  };
+
+  useEffect(() => {
+    handleSearch({ query: queryString, filters: selectedFilters });
+  }, [queryString, selectedFilters]);
+
+  const handleFilterChange = (filters: any) => {
+    console.log('filters: ', filters);
+    setSelectedFilters(filters);
+    handleSearch({ query: queryString, filters });
+  };
+
+  const clearFilters = () => {
+    setSelectedFilters({});
+    setQueryString('');
+    handleSearch({ query: '', filters: {} });
   };
 
   return (
@@ -18,12 +45,24 @@ export default function Home() {
         <h1 className="text-3xl font-bold mb-6">B2B Marketplace Search</h1>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="md:col-span-1">
-            <FacetFilters facets={facets} onFilterChange={() => {}} />
+            <FacetFilters
+              selectedFilters={selectedFilters}
+              setSelectedFilters={setSelectedFilters}
+              facets={facets}
+              onFilterChange={handleFilterChange}
+              onSearch={handleSearch}
+              isLoading={isLoading}
+            />
           </div>
           <div className="md:col-span-3">
-            <SearchBar onSearch={handleSearch} />
+            <SearchBar
+              queryString={queryString}
+              onSearch={handleSearch}
+              setQueryString={setQueryString}
+              clearFilters={clearFilters}
+            />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {searchResults.map((product) => (
+              {products.map((product) => (
                 <div key={product._id} className="border p-4 rounded shadow">
                   <h3 className="font-bold">{product.name}</h3>
                   <p className="text-gray-600">

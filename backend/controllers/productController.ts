@@ -3,41 +3,32 @@ import { Product } from '../models/Product';
 import { parseNaturalLanguageQuery } from '../utils/nlpProcessor';
 
 export async function searchProducts(req: NextApiRequest, res: NextApiResponse) {
-  const { query } = req.query;
-  console.log('query: ', query);
-
-  if (!query) {
-    return res.status(400).json({ error: 'Query parameter is required' });
-  }
+  const { query, filters } = req.body;
+  console.log('Search params:', { query, filters });
 
   try {
-    const intent = await parseNaturalLanguageQuery(query as string);
-    console.log('intent: ', intent);
+    const intent = await parseNaturalLanguageQuery(query);
+    console.log('Intent:', intent);
     let searchQuery: any = {};
 
+    // Intent-based search conditions
     if (intent.productType && intent.confidence.productType >= 0.7) {
-      console.log('Original product type:', intent.productType);
-
       const terms = intent.productType.split(/\s+/);
-      console.log('Split terms:', terms);
-
-      const termConditions = terms.map((term) => {
-        const condition = {
-          $or: [
-            { category: { $regex: term, $options: 'i' } },
-            { subcategory: { $regex: term, $options: 'i' } },
-          ],
-        };
-        console.log(`Condition for term "${term}":`, JSON.stringify(condition));
-        return condition;
-      });
-
+      const termConditions = terms.map((term) => ({
+        $or: [
+          { category: { $regex: term, $options: 'i' } },
+          { subcategory: { $regex: term, $options: 'i' } },
+        ],
+      }));
       searchQuery.$and = termConditions;
-      console.log('Final search query:', JSON.stringify(searchQuery));
     }
 
     if (intent.location && intent.confidence.location >= 0.7) {
-      searchQuery['location.city'] = { $regex: intent.location, $options: 'i' };
+      searchQuery.$or = [
+        { 'location.city': { $regex: intent.location, $options: 'i' } },
+        { 'location.state': { $regex: intent.location, $options: 'i' } },
+        { 'location.country': { $regex: intent.location, $options: 'i' } },
+      ];
     }
 
     if (intent.priceRange && intent.confidence.priceRange >= 0.7) {
@@ -49,6 +40,7 @@ export async function searchProducts(req: NextApiRequest, res: NextApiResponse) 
       }
     }
 
+    // Intent filters
     Object.entries(intent.filters).forEach(([key, value]) => {
       if (intent.confidence[key] >= 0.7) {
         if (typeof value === 'string') {
@@ -63,9 +55,37 @@ export async function searchProducts(req: NextApiRequest, res: NextApiResponse) 
       }
     });
 
-    console.log('searchQuery: ', JSON.stringify(searchQuery, null, 2));
+    // User-selected filters from request body
+    if (filters) {
+      Object.entries(filters).forEach(([key, values]) => {
+        if (Array.isArray(values) && values.length > 0) {
+          if (key === 'locations') {
+            // Combine with existing location conditions if any
+            const locationConditions = [
+              { 'location.city': { $in: values.map((v) => v.value) } },
+              { 'location.state': { $in: values.map((v) => v.value) } },
+              { 'location.country': { $in: values.map((v) => v.value) } },
+            ];
 
+            if (searchQuery.$or) {
+              searchQuery.$or = [...searchQuery.$or, ...locationConditions];
+            } else {
+              searchQuery.$or = locationConditions;
+            }
+          } else if (typeof values[0] === 'object' && 'value' in values[0]) {
+            searchQuery[key] = {
+              $in: values.map((v) => v.value),
+            };
+          } else {
+            searchQuery[key] = { $in: values };
+          }
+        }
+      });
+    }
+
+    console.log('Final search query:', JSON.stringify(searchQuery, null, 2));
     const products = await Product.find(searchQuery).lean();
+    console.log('Found products:', products.length);
 
     const productsWithConfidence = products.map((product) => ({
       ...product,
@@ -106,7 +126,6 @@ export async function searchProducts(req: NextApiRequest, res: NextApiResponse) 
     res.status(500).json({
       error: 'Error performing search',
       details: error instanceof Error ? error.message : 'Unknown error',
-      fallbackResults: error.fallbackResults || null,
     });
   }
 }
@@ -131,8 +150,26 @@ export async function bulkCreateProducts(req: NextApiRequest, res: NextApiRespon
   }
 }
 
+interface FacetConfidence {
+  distribution: Record<string, number>;
+  average: number;
+}
+
+interface Facets {
+  confidence: FacetConfidence;
+  categories?: Array<{ value: string; confidence: number }>;
+  priceRange?: { min: number; max: number; confidence: number };
+  locations?: Array<{ value: string; confidence: number }>;
+  [key: string]: any;
+}
+
+interface AttributeStats {
+  count: number;
+  confidence: number;
+}
+
 async function getFacetsForResults(products: any[]) {
-  const facets: any = {
+  const facets: Facets = {
     confidence: {
       average: 0,
       distribution: {},
@@ -152,8 +189,10 @@ async function getFacetsForResults(products: any[]) {
   });
 
   facets.confidence.average =
-    Object.values(facets.confidence.distribution).reduce((a: number, b: number) => a + b, 0) /
-    Object.keys(facets.confidence.distribution).length;
+    Object.values(facets.confidence.distribution as Record<string, number>).reduce(
+      (a: number, b: number) => a + b,
+      0,
+    ) / Object.keys(facets.confidence.distribution).length;
 
   const categories = [...new Set(products.map((p) => p.category))];
   if (categories.length > 0) {
@@ -208,11 +247,14 @@ async function getFacetsForResults(products: any[]) {
   });
 
   attributeFacets.forEach((values, key) => {
-    facets[key] = Array.from(values.entries()).map(([value, stats]) => ({
-      value,
-      count: stats.count,
-      confidence: stats.confidence / stats.count,
-    }));
+    facets[key] = Array.from(values.entries()).map((entry) => {
+      const [value, stats] = entry as [string, AttributeStats];
+      return {
+        value,
+        count: stats.count,
+        confidence: stats.confidence / stats.count,
+      };
+    });
   });
 
   const filteredFacets = Object.fromEntries(
