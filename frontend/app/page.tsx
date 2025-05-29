@@ -17,27 +17,30 @@ export default function Home() {
     dispatch(fetchFacets());
   }, [dispatch]);
 
-  const handleSearch = (data = { query: queryString, filters: selectedFilters }) => {
-    console.log('queryString: ', queryString);
-    dispatch(setQuery(queryString));
-    dispatch(performSearch(data));
-  };
+  const handleSearch = useCallback(
+    (data = { query: queryString, filters: selectedFilters }) => {
+      console.log('queryString: ', queryString);
+      dispatch(setQuery(queryString));
+      dispatch(performSearch(data));
+    },
+    [queryString, selectedFilters, dispatch],
+  );
 
   useEffect(() => {
     handleSearch({ query: queryString, filters: selectedFilters });
-  }, [queryString, selectedFilters]);
+  }, [queryString, selectedFilters, handleSearch]);
 
-  const handleFilterChange = (filters: any) => {
+  const handleFilterChange = useCallback((filters: any) => {
     console.log('filters: ', filters);
     setSelectedFilters(filters);
-    handleSearch({ query: queryString, filters });
-  };
+  }, []);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSelectedFilters({});
     setQueryString('');
-    handleSearch({ query: '', filters: {} });
-  };
+    dispatch(setQuery(''));
+    dispatch(setFilters({}));
+  }, []);
 
   return (
     <main className="p-6">
