@@ -1,8 +1,6 @@
 'use client';
-import { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { setQuery, performSearch } from '../store/searchSlice';
-import type { RootState, AppDispatch } from '../store';
+import { useSelector } from 'react-redux';
+import type { RootState } from '../store';
 
 interface SearchBarProps {
   queryString: string;
@@ -11,9 +9,14 @@ interface SearchBarProps {
   setQueryString: (query: string) => void;
 }
 
-export default function SearchBar({ queryString, onSearch, setQueryString }: SearchBarProps) {
-  const { clearFilters, query, isLoading } = useSelector((state: RootState) => state.search);
-
+export default function SearchBar({
+  queryString,
+  onSearch,
+  clearFilters,
+  setQueryString,
+}: SearchBarProps) {
+  const { query, isLoading } = useSelector((state: RootState) => state.search);
+  console.log('query: ', query);
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       onSearch();
@@ -27,6 +30,7 @@ export default function SearchBar({ queryString, onSearch, setQueryString }: Sea
           type="text"
           className="border rounded p-2 w-full text-black pr-24"
           placeholder="Search products... (e.g., organic NPK fertilizers in Thrissur under ₹500/kg)"
+          value={queryString}
           onChange={(e) => {
             setQueryString(e.target.value);
           }}
@@ -34,7 +38,7 @@ export default function SearchBar({ queryString, onSearch, setQueryString }: Sea
         />
         {queryString && (
           <button
-            onClick={onSearch}
+            onClick={clearFilters}
             disabled={isLoading}
             className="absolute right-[100px] top-1/2 transform -translate-y-1/2 bg-gray-500 text-white px-4 py-1 rounded"
           >
