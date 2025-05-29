@@ -1,14 +1,20 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { searchProducts } from './services/searchApi';
 import { getFacets } from './services/facetApi';
+import { Product } from '@/types';
+
+interface FacetValue {
+  value: string | number;
+  count?: number;
+}
 
 interface SearchState {
-  products: any[];
+  products: Product[];
   facets: any;
   query: string;
   isLoading: boolean;
   error: string | null;
-  selectedFilters: Record<string, any[]>;
+  selectedFilters: Record<string, FacetValue[]>;
 }
 
 const initialState: SearchState = {
@@ -22,7 +28,7 @@ const initialState: SearchState = {
 
 export const performSearch = createAsyncThunk(
   'search/performSearch',
-  async (params: { query: string; filters?: Record<string, any[]> }) => {
+  async (params: { query: string; filters?: Record<string, FacetValue[]> }) => {
     const response = await searchProducts(params);
     return response;
   },

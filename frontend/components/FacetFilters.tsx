@@ -1,16 +1,25 @@
 'use client';
 import { useState, useEffect } from 'react';
 
+interface FacetValue {
+  value: string | number;
+  count?: number;
+}
+
 interface Facets {
   priceRange: { min: number; max: number };
-  [key: string]: any;
+  [key: string]: FacetValue[] | { min: number; max: number };
 }
 
 interface FacetFiltersProps {
-  facets: any;
-  selectedFilters: Record<string, any[]>;
-  setSelectedFilters: (filters: Record<string, any[]>) => void;
-  onFilterChange: (filters: any) => void;
+  facets: Facets;
+  selectedFilters: Record<string, FacetValue[]>;
+  setSelectedFilters: (
+    filters:
+      | Record<string, FacetValue[]>
+      | ((prev: Record<string, FacetValue[]>) => Record<string, FacetValue[]>),
+  ) => void;
+  onFilterChange: (filters: Record<string, FacetValue[]>) => void;
   onSearch: () => void;
   isLoading: boolean;
 }
@@ -29,22 +38,26 @@ export default function FacetFilters({
     setIsMounted(true);
   }, []);
 
-  const handleFilterChange = async (facetKey: string, value: any) => {
-    setSelectedFilters((prev) => {
+  const handleFilterChange = async (facetKey: string, value: FacetValue) => {
+    setSelectedFilters((prev: Record<string, FacetValue[]>) => {
       const newFilters = { ...prev };
       if (!newFilters[facetKey]) {
         newFilters[facetKey] = [];
       }
 
       // Check if the value already exists in the array
-      const valueExists = newFilters[facetKey].some((item) => item.value === value.value);
+      const valueExists = newFilters[facetKey].some(
+        (item: FacetValue) => item.value === value.value,
+      );
 
       if (!valueExists) {
         // Add the value if it doesn't exist
         newFilters[facetKey] = [...newFilters[facetKey], value];
       } else {
         // Remove the value if it exists
-        newFilters[facetKey] = newFilters[facetKey].filter((item) => item.value !== value.value);
+        newFilters[facetKey] = newFilters[facetKey].filter(
+          (item: FacetValue) => item.value !== value.value,
+        );
       }
 
       // Clean up empty arrays
@@ -85,7 +98,9 @@ export default function FacetFilters({
                   min={min}
                   max={max}
                   className="w-full"
-                  onChange={(e) => handleFilterChange('price', Number(e.target.value))}
+                  onChange={(e) =>
+                    handleFilterChange('price', { value: Number(e.target.value) } as FacetValue)
+                  }
                 />
                 <span>{min}</span>
                 <span>{max}</span>
@@ -97,7 +112,7 @@ export default function FacetFilters({
           <div key={key} className="mb-4">
             <h4 className="font-semibold mb-2">{key.charAt(0).toUpperCase() + key.slice(1)}</h4>
             <div className="space-y-2">
-              {values.map((value: any, index: number) => {
+              {values.map((value: FacetValue, index: number) => {
                 const isChecked =
                   selectedFilters[key]?.some((v) => v.value === value.value) || false;
                 return (
