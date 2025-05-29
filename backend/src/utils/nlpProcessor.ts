@@ -13,12 +13,12 @@ interface SearchIntent {
   confidence: {
     [key: string]: number;
   };
+  remainingQuery?: string;
 }
 
 export async function parseNaturalLanguageQuery(query: string): Promise<SearchIntent> {
   try {
-    const normalizedQuery = query.toLowerCase();
-
+    let remainingQuery = query.toLowerCase();
     const intent: SearchIntent = {
       filters: {},
       confidence: {
@@ -26,20 +26,29 @@ export async function parseNaturalLanguageQuery(query: string): Promise<SearchIn
         location: 0.8,
         priceRange: 0.8,
       },
+      remainingQuery: query,
+    };
+
+    const removeMatchedText = (matchedText: string) => {
+      const regex = new RegExp(matchedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      remainingQuery = remainingQuery.replace(regex, '').trim();
     };
 
     const productTypes = ['shirt', 'pants', 'dress', 'shoes', 'jacket', 'hat', 'accessories'];
     for (const type of productTypes) {
-      if (normalizedQuery.includes(type)) {
+      if (remainingQuery.includes(type)) {
         intent.productType = type;
+        removeMatchedText(type);
         break;
       }
     }
 
     const locationPattern = /\b(in|at|near|from)\s+([a-zA-Z\s]+?)(?:\s|$)/i;
-    const locationMatch = normalizedQuery.match(locationPattern);
+    const locationMatch = remainingQuery.match(locationPattern);
     if (locationMatch) {
+      const fullMatch = locationMatch[0];
       intent.location = locationMatch[2].trim();
+      removeMatchedText(fullMatch);
     }
 
     const pricePatterns = {
@@ -51,43 +60,43 @@ export async function parseNaturalLanguageQuery(query: string): Promise<SearchIn
 
     let priceMatched = false;
 
-    if (pricePatterns.under.test(normalizedQuery)) {
-      const match = normalizedQuery.match(pricePatterns.under);
-      intent.priceRange = {
-        max: parseInt(match![1]),
-        unit: match![2] || 'USD',
-        currency: 'INR',
-      };
-      priceMatched = true;
-    } else if (pricePatterns.over.test(normalizedQuery)) {
-      const match = normalizedQuery.match(pricePatterns.over);
-      intent.priceRange = {
-        min: parseInt(match![1]),
-        unit: 'USD',
-      };
-      priceMatched = true;
-    } else if (pricePatterns.between.test(normalizedQuery)) {
-      const match = normalizedQuery.match(pricePatterns.between);
-      intent.priceRange = {
-        min: parseInt(match![1]),
-        max: parseInt(match![2]),
-        unit: 'USD',
-      };
-      priceMatched = true;
-    } else if (!priceMatched && pricePatterns.exact.test(normalizedQuery)) {
-      const match = normalizedQuery.match(pricePatterns.exact);
-      const priceStr = match![1];
-      const priceContext = normalizedQuery.substring(
-        Math.max(0, normalizedQuery.indexOf(priceStr) - 20),
-        Math.min(normalizedQuery.length, normalizedQuery.indexOf(priceStr) + 20),
-      );
-
-      if (!/(?:under|over|between|less than|more than|above|below)/i.test(priceContext)) {
-        intent.priceRange = {
-          min: parseInt(priceStr),
-          max: parseInt(priceStr),
-          unit: 'USD',
-        };
+    for (const [type, pattern] of Object.entries(pricePatterns)) {
+      const match = remainingQuery.match(pattern);
+      if (match) {
+        const fullMatch = match[0];
+        if (type === 'under') {
+          intent.priceRange = {
+            max: parseInt(match[1]),
+            unit: match[2] || 'USD',
+            currency: 'INR',
+          };
+        } else if (type === 'over') {
+          intent.priceRange = {
+            min: parseInt(match[1]),
+            unit: 'USD',
+          };
+        } else if (type === 'between') {
+          intent.priceRange = {
+            min: parseInt(match[1]),
+            max: parseInt(match[2]),
+            unit: 'USD',
+          };
+        } else if (type === 'exact') {
+          const priceContext = remainingQuery.substring(
+            Math.max(0, remainingQuery.indexOf(match[1]) - 20),
+            Math.min(remainingQuery.length, remainingQuery.indexOf(match[1]) + 20),
+          );
+          if (!/(?:under|over|between|less than|more than|above|below)/i.test(priceContext)) {
+            intent.priceRange = {
+              min: parseInt(match[1]),
+              max: parseInt(match[1]),
+              unit: 'USD',
+            };
+          }
+        }
+        removeMatchedText(fullMatch);
+        priceMatched = true;
+        break;
       }
     }
 
@@ -100,9 +109,11 @@ export async function parseNaturalLanguageQuery(query: string): Promise<SearchIn
     };
 
     for (const [filterType, pattern] of Object.entries(filterPatterns)) {
-      const match = normalizedQuery.match(pattern);
+      const match = remainingQuery.match(pattern);
       if (match) {
-        intent.filters[filterType] = match[0].toLowerCase();
+        const fullMatch = match[0];
+        intent.filters[filterType] = fullMatch.toLowerCase();
+        removeMatchedText(fullMatch);
       }
     }
 
@@ -110,23 +121,24 @@ export async function parseNaturalLanguageQuery(query: string): Promise<SearchIn
     if (!intent.location) intent.confidence.location = 0.3;
     if (!intent.priceRange) intent.confidence.priceRange = 0.3;
 
+    intent.remainingQuery = remainingQuery;
+
     return intent;
   } catch (error) {
-    console.error('Error parsing query:', error);
     return fallbackRuleBasedParsing(query);
   }
 }
 
 function fallbackRuleBasedParsing(query: string): SearchIntent {
-  const intent: SearchIntent = {
+  return {
     filters: {},
     confidence: {
       productType: 0.5,
       location: 0.5,
       priceRange: 0.5,
     },
+    remainingQuery: query,
   };
-  return intent;
 }
 
 async function parseQuery(query: string): Promise<SearchIntent> {

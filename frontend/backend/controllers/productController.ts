@@ -4,11 +4,9 @@ import { parseNaturalLanguageQuery } from '../utils/nlpProcessor';
 
 export async function searchProducts(req: NextApiRequest, res: NextApiResponse) {
   const { query, filters } = req.body;
-  console.log('Search params:', { query, filters });
 
   try {
     const intent = await parseNaturalLanguageQuery(query);
-    console.log('Intent:', intent);
     let searchQuery: any = {};
 
     // Intent-based search conditions
@@ -83,9 +81,7 @@ export async function searchProducts(req: NextApiRequest, res: NextApiResponse) 
       });
     }
 
-    console.log('Final search query:', JSON.stringify(searchQuery, null, 2));
     const products = await Product.find(searchQuery).lean();
-    console.log('Found products:', products.length);
 
     const productsWithConfidence = products.map((product) => ({
       ...product,
@@ -102,7 +98,6 @@ export async function searchProducts(req: NextApiRequest, res: NextApiResponse) 
     }));
 
     const facets = await getFacetsForResults(productsWithConfidence);
-    console.log('productsWithConfidence: ', productsWithConfidence);
     res.status(200).json({
       products: productsWithConfidence,
       facets,
@@ -260,8 +255,6 @@ async function getFacetsForResults(products: any[]) {
   const filteredFacets = Object.fromEntries(
     Object.entries(facets).filter(([key]) => !key.startsWith('$__')),
   );
-
-  console.log('facets with confidence: ', filteredFacets);
 
   return filteredFacets;
 }

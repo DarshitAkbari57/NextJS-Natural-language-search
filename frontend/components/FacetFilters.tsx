@@ -29,11 +29,7 @@ export default function FacetFilters({
     setIsMounted(true);
   }, []);
 
-  console.log('facetKey: selectedFilters: ', selectedFilters);
   const handleFilterChange = async (facetKey: string, value: any) => {
-    console.log('facetKey: ', facetKey);
-    console.log('value: ', value);
-
     setSelectedFilters((prev) => {
       const newFilters = { ...prev };
       if (!newFilters[facetKey]) {
@@ -56,7 +52,6 @@ export default function FacetFilters({
         delete newFilters[facetKey];
       }
 
-      console.log('Updated filters:', newFilters);
       onFilterChange(newFilters);
       return newFilters;
     });

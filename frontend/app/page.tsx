@@ -19,7 +19,6 @@ export default function Home() {
 
   const handleSearch = useCallback(
     (data = { query: queryString, filters: selectedFilters }) => {
-      console.log('queryString: ', queryString);
       dispatch(setQuery(queryString));
       dispatch(performSearch(data));
     },
@@ -31,7 +30,6 @@ export default function Home() {
   }, [queryString, selectedFilters, handleSearch]);
 
   const handleFilterChange = useCallback((filters: any) => {
-    console.log('filters: ', filters);
     setSelectedFilters(filters);
   }, []);
 
@@ -60,6 +58,7 @@ export default function Home() {
           <div className="md:col-span-3">
             <SearchBar
               queryString={queryString}
+              selectedFilters={selectedFilters}
               onSearch={handleSearch}
               setQueryString={setQueryString}
               clearFilters={clearFilters}

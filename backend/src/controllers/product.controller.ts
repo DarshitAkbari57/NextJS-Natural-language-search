@@ -24,13 +24,17 @@ interface AttributeStats {
 export class ProductController {
   async search(req: Request, res: Response, next: NextFunction) {
     const { query, filters } = req.body;
-    console.log('Search params:', { query, filters });
 
     try {
       const intent = await parseNaturalLanguageQuery(query);
-      console.log('Intent:', intent);
       let searchQuery: any = {};
-
+      if (intent.remainingQuery && intent.remainingQuery.trim()) {
+        searchQuery.$or = [
+          { name: { $regex: intent.remainingQuery, $options: 'i' } },
+          { category: { $regex: intent.remainingQuery, $options: 'i' } },
+          { subcategory: { $regex: intent.remainingQuery, $options: 'i' } },
+        ];
+      }
       if (intent.productType && intent.confidence.productType >= 0.7) {
         const terms = intent.productType.split(/\s+/);
         const termConditions = terms.map((term) => ({
@@ -39,17 +43,28 @@ export class ProductController {
             { subcategory: { $regex: term, $options: 'i' } },
           ],
         }));
-        searchQuery.$and = termConditions;
+        searchQuery.$and = [...(searchQuery.$and || []), ...termConditions];
       }
-
       if (intent.location && intent.confidence.location >= 0.7) {
         searchQuery.$or = [
+          // { name: { $regex: query, $options: 'i' } },
+          // { category: { $regex: query, $options: 'i' } },
+          // { subcategory: { $regex: query, $options: 'i' } },
           { 'location.city': { $regex: intent.location, $options: 'i' } },
           { 'location.state': { $regex: intent.location, $options: 'i' } },
           { 'location.country': { $regex: intent.location, $options: 'i' } },
         ];
       }
-
+      if (intent.productType && intent.confidence.productType >= 0.7) {
+        const terms = intent.productType.split(/\s+/);
+        const termConditions = terms.map((term) => ({
+          $or: [
+            { category: { $regex: term, $options: 'i' } },
+            { subcategory: { $regex: term, $options: 'i' } },
+          ],
+        }));
+        searchQuery.$and = [...(searchQuery.$and || []), ...termConditions];
+      }
       if (intent.priceRange && intent.confidence.priceRange >= 0.7) {
         if (intent.priceRange.max) {
           searchQuery.price = { ...searchQuery.price, $lte: intent.priceRange.max };
@@ -58,7 +73,6 @@ export class ProductController {
           searchQuery.price = { ...searchQuery.price, $gte: intent.priceRange.min };
         }
       }
-
       Object.entries(intent.filters).forEach(([key, value]) => {
         if (intent.confidence[key] >= 0.7) {
           if (typeof value === 'string') {
@@ -73,7 +87,9 @@ export class ProductController {
         }
       });
 
+      searchQuery.$and = [...(searchQuery.$and || []), { $or: [] }];
       if (filters) {
+        const queryLength = searchQuery.$and.length;
         Object.entries(filters).forEach(([key, values]) => {
           if (Array.isArray(values) && values.length > 0) {
             if (key === 'locations') {
@@ -83,11 +99,7 @@ export class ProductController {
                 { 'location.country': { $in: values.map((v) => v.value) } },
               ];
 
-              if (searchQuery.$or) {
-                searchQuery.$or = [...searchQuery.$or, ...locationConditions];
-              } else {
-                searchQuery.$or = locationConditions;
-              }
+              searchQuery.$and[queryLength - 1] = { $or: locationConditions };
             } else if (typeof values[0] === 'object' && 'value' in values[0]) {
               searchQuery[key] = {
                 $in: values.map((v) => v.value),
@@ -99,9 +111,7 @@ export class ProductController {
         });
       }
 
-      console.log('Final search query:', JSON.stringify(searchQuery, null, 2));
       const products = await productService.getProducts(searchQuery);
-      console.log('Found products:', products.length);
 
       const productsWithConfidence = products.map((product) => ({
         ...product,
@@ -118,7 +128,6 @@ export class ProductController {
       }));
 
       const facets = await productService.getFacetsForResults(productsWithConfidence);
-      console.log('productsWithConfidence: ', productsWithConfidence);
       res.status(200).json({
         products: productsWithConfidence,
         facets,
@@ -138,7 +147,6 @@ export class ProductController {
         },
       });
     } catch (error) {
-      console.error('Search error:', error);
       res.status(500).json({
         error: 'Error performing search',
         details: error instanceof Error ? error.message : 'Unknown error',

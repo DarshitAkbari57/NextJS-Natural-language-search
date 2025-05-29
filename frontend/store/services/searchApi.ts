@@ -7,7 +7,6 @@ interface SearchParams {
 }
 
 export const searchProducts = async ({ query, filters, page = 1, limit = 10 }: SearchParams) => {
-  console.log('checkkck query: ', query, filters);
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/products/search`, {
     method: 'POST',
     headers: {

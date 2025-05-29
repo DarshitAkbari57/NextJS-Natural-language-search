@@ -4,6 +4,7 @@ import type { RootState } from '../store';
 
 interface SearchBarProps {
   queryString: string;
+  selectedFilters: Record<string, any>;
   onSearch: () => void;
   clearFilters: () => void;
   setQueryString: (query: string) => void;
@@ -11,12 +12,12 @@ interface SearchBarProps {
 
 export default function SearchBar({
   queryString,
+  selectedFilters,
   onSearch,
   clearFilters,
   setQueryString,
 }: SearchBarProps) {
-  const { query, isLoading } = useSelector((state: RootState) => state.search);
-  console.log('query: ', query);
+  const { isLoading } = useSelector((state: RootState) => state.search);
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       onSearch();
@@ -36,7 +37,7 @@ export default function SearchBar({
           }}
           onKeyPress={handleKeyPress}
         />
-        {queryString && (
+        {(queryString || Object.keys(selectedFilters).length > 0) && (
           <button
             onClick={clearFilters}
             disabled={isLoading}

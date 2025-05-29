@@ -118,13 +118,10 @@ export class ProductService {
       Object.entries(facets).filter(([key]) => !key.startsWith('$__')),
     );
 
-    console.log('facets with confidence: ', filteredFacets);
-
     return filteredFacets;
   }
 
   async getProducts(query: any) {
-    console.log('query: ', query);
     return await Product.find(query).lean();
   }
 
